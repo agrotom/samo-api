@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "samo-api", "samo-api.csproj", "{A53AA158-DC40-DA8C-7852-C20439AF1D96}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A53AA158-DC40-DA8C-7852-C20439AF1D96}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A53AA158-DC40-DA8C-7852-C20439AF1D96}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A53AA158-DC40-DA8C-7852-C20439AF1D96}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A53AA158-DC40-DA8C-7852-C20439AF1D96}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {8CB58BBD-D09E-4205-9378-4819AE449A5E}
+	EndGlobalSection
+EndGlobal
