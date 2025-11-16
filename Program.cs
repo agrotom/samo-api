@@ -33,6 +33,13 @@ builder.Services.AddIdentity<User, IdentityRole>()
 builder.Services.AddControllers();
 builder.Services.AddCors();
 
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("RequireName", policy =>
+        policy.RequireClaim(ClaimTypes.Name)
+    );
+});
+
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IDbInitializer, DbInitializer>();
 
@@ -44,12 +51,22 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     {
         options.TokenValidationParameters = new TokenValidationParameters
         {
+            NameClaimType = ClaimTypes.Name,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(secretKey)),
             ValidateIssuer = false,
             ValidateAudience = false
         };
     });
+
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.Events.OnRedirectToLogin = context =>
+    {
+        context.Response.StatusCode = 401;
+        return Task.CompletedTask;
+    };
+});
 
 var app = builder.Build();
 
@@ -77,9 +94,24 @@ if (app.Environment.IsDevelopment())
 
 }
 
-app.UseHttpsRedirection();
-app.UseCors(builder => builder.AllowAnyHeader().AllowAnyMethod().AllowCredentials().WithOrigins("http://localhost:3000"));
+app.Use(async (context, next) =>
+{
+    if (context.User.Identity != null && context.User.Identity.IsAuthenticated)
+    {
+        if (string.IsNullOrEmpty(context.User.Identity.Name))
+        {
+            context.Response.StatusCode = 401; // Unauthorized
+            await context.Response.WriteAsync("Name claim missing in JWT");
+            return;
+        }
+    }
 
+    await next();
+});
+
+app.UseHttpsRedirection();
+app.UseCors(builder => builder.AllowAnyHeader().AllowAnyMethod().AllowCredentials().WithOrigins("http://localhost:5173"));
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

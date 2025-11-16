@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -9,15 +10,14 @@ using Samo.Models.ViewModels;
 
 namespace Samo.Controllers;
 
-[Route($"{Constants.API_V1}/")]
+[Route($"{Constants.API_V1}/auth/")]
 [ApiController]
 public class AccountController(SamoDbContext context,
     UserManager<User> userManager,
     ITokenService tokenService,
     RoleManager<IdentityRole> roleManager,
-    SignInManager<User> signInManager) : ControllerBase
+    SignInManager<User> signInManager) : BaseController(context)
 {
-    private readonly SamoDbContext _context = context;
     private readonly UserManager<User> _userManager = userManager;
     private readonly ITokenService _tokenService = tokenService;
     private readonly RoleManager<IdentityRole> _roleManager = roleManager;
@@ -53,6 +53,10 @@ public class AccountController(SamoDbContext context,
         {
             message = "Login successful!",
             email = user.Email,
+            sureName = user.SureName,
+            firstName = user.FirstName,
+            achieve = user.Achieve,
+            birthDate = user.BirthDate,
             token = token
         });
 
@@ -86,6 +90,22 @@ public class AccountController(SamoDbContext context,
         {
             message = "Registration successful for new user",
             email = user.Email
+        });
+    }
+
+    [HttpGet("me")]
+    [Authorize(AuthenticationSchemes = "Bearer", Policy = Constants.REQUIRE_NAME)]
+    public async Task<ActionResult> Me()
+    {
+        var user = await _userManager.FindByEmailAsync(User.Identity?.Name);
+
+        return Ok(new
+        {
+            email = user.Email,
+            sureName = user.SureName,
+            firstName = user.FirstName,
+            achieve = user.Achieve,
+            birthDate = user.BirthDate
         });
     }
 }

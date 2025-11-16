@@ -2,8 +2,19 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Samo.Models;
 
-public class DateUnique() : UserDependency
+public class DateUnique : UserDependency
 {
+
+    public DateUnique()
+    {
+
+    }
+    
+    public DateUnique(User user) : base(user)
+    {
+        
+    }
+
     [Key]
-    public DateOnly Date { get; set; } = DateOnly.FromDateTime(DateTime.Now);
+    public DateTime Date { get; set; } = DateTime.Today.ToUniversalTime();
 }

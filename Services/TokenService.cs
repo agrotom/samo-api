@@ -28,7 +28,8 @@ public class TokenService([NotNull] IConfiguration config) : ITokenService
             {
                 new(JwtRegisteredClaimNames.Sub, user.Email),
                 new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new(ClaimTypes.NameIdentifier, user.Id.ToString())
+                new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new(ClaimTypes.Name, user.Email)
             };
 
         var token = new JwtSecurityToken
