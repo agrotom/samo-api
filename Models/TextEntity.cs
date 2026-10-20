@@ -16,7 +16,7 @@ public class TextEntity : DateUnique
     }
 
     public string Text { get; set; } = "";
-    public DateTime CreatedAt { get; set; } = DateTime.Today.ToUniversalTime();
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 [Table("insights")]

@@ -35,17 +35,15 @@ public class AccountController(SamoDbContext context,
 
         if (user == null)
         {
-            return Unauthorized(new { message = "Lack of account." });
+            return BadRequest(new { message = "user_not_exists" });
         }
 
         var result = await _signInManager.CheckPasswordSignInAsync(user, model.Password, false);
 
         if (!result.Succeeded)
         {
-            return Unauthorized(new { message = "Invalid email or password!" });
+            return BadRequest(new { message = "bad_credentials" });
         }
-
-        //HttpContent.Session.SetString("email", user.Email);
 
         var token = _tokenService.CreateToken(user);
 
@@ -74,16 +72,16 @@ public class AccountController(SamoDbContext context,
         {
             return BadRequest(new
             {
-                message = "User already exists!"
+                message = "user_exists"
             });
         }
 
-        var user = new User(model.Email, model.SureName, model.FirstName, model.Achieve, model.BirthDate.ToUniversalTime());
+        var user = new User(model.Email, model.SureName, model.FirstName, model.Achieve, DateOnly.FromDateTime(model.BirthDate));
 
         var result = await _userManager.CreateAsync(user, model.Password);
         if (!result.Succeeded)
         {
-            return BadRequest(new { message = "Invalid email, uesrname or password!" });
+            return BadRequest(new { message = "bad_credentials" });
         }
 
         return Ok(new
@@ -97,7 +95,12 @@ public class AccountController(SamoDbContext context,
     [Authorize(AuthenticationSchemes = "Bearer", Policy = Constants.REQUIRE_NAME)]
     public async Task<ActionResult> Me()
     {
-        var user = await _userManager.FindByEmailAsync(User.Identity?.Name);
+        var user = await _userManager.FindByEmailAsync(User.Identity!.Name);
+
+        if (user == null)
+        {
+            return Unauthorized();
+        }
 
         return Ok(new
         {

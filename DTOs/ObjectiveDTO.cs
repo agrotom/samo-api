@@ -9,6 +9,8 @@ public class ObjectiveDTO : DateDTO
     public bool Favorite { get; set; }
     public string BalanceType { get; set; }
     public DateTime DeadLine { get; set; }
+    
+    [JsonPropertyName("image_url")]
     public string ImageUrl { get; set; }
     public bool Completed { get; set; }
     public string GoalsLabel { get; set; }

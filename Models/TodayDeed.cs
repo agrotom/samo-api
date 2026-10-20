@@ -8,7 +8,7 @@ public class TodayDeed : UserDependency
     public int Id { get; set; }
     public int Level { get; set; }
     public string Text { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.Today.ToUniversalTime();
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public TodayDeed() {}
 

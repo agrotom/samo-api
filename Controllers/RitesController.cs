@@ -33,11 +33,16 @@ public class RitesController(SamoDbContext dbContext) : BaseController(dbContext
             return Unauthorized();
         }
 
-        await _context.Rites.AddAsync(new Rite(request.Completed, request.Text, request.SortOrder, user), ct);
+        Rite rite = new Rite(request.Completed, request.Text, request.SortOrder, user);
+
+        await _context.Rites.AddAsync(rite, ct);
 
         await _context.SaveChangesAsync(ct);
 
-        return Ok();
+        return Ok(new
+        {
+            id = rite.Id
+        });
     }
 
     [HttpPut("rite/{id}")]
@@ -54,8 +59,10 @@ public class RitesController(SamoDbContext dbContext) : BaseController(dbContext
         {
             return Unauthorized();
         }
-
-        var rites = await _context.Rites.Where(t => user.Email == User.Identity!.Name && t.Id == id && DbFuncs.ToLocalTime(t.CreatedAt, timeZone) == DbFuncs.ToLocalTime(DateTime.Today.ToUniversalTime(), timeZone)).ToArrayAsync(ct);
+        
+        var limits = Dates.TodayLimit(timeZone);
+        var rites = await _context.Rites.Where(t => user.Email == User.Identity!.Name && t.Id == id)
+            .Where(t => t.CreatedAt >= limits[0] && t.CreatedAt < limits[1]).ToArrayAsync(ct);
 
         Rite? rite = await _context.Rites.FirstOrDefaultAsync(t => t.Id == id, ct);
 
@@ -74,7 +81,7 @@ public class RitesController(SamoDbContext dbContext) : BaseController(dbContext
     }
 
     [HttpDelete("rite/{id}")]
-    public async Task<IActionResult> RemoveRite(int id, CancellationToken ct)
+    public async Task<IActionResult> RemoveRite([FromHeader(Name = Constants.TIME_ZONE_HEADER_NAME)] string timeZone, int id, CancellationToken ct)
     {
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == User.Identity!.Name, ct);
 
@@ -83,7 +90,8 @@ public class RitesController(SamoDbContext dbContext) : BaseController(dbContext
             return Unauthorized();
         }
 
-        var rite = await _context.Rites.FirstOrDefaultAsync(t => user.Email == User.Identity!.Name && t.Id == id, ct);
+        var limits = Dates.TodayLimit(timeZone);
+        var rite = await _context.Rites.FirstOrDefaultAsync(t => user.Email == User.Identity!.Name && t.Id == id && t.CreatedAt >= limits[0] && t.CreatedAt < limits[1], ct);
 
         if (rite == null)
         {
@@ -98,7 +106,7 @@ public class RitesController(SamoDbContext dbContext) : BaseController(dbContext
     }
 
     [HttpGet("rite")]
-    public async Task<IActionResult> GetRites([FromHeader(Name = Constants.TIME_ZONE_HEADER_NAME)] string timeZone, CancellationToken ct)
+    public async Task<IActionResult> GetRites([FromHeader(Name = Constants.TIME_ZONE_HEADER_NAME)] string timeZone, [FromQuery] DateTime date, CancellationToken ct)
     {
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == User.Identity!.Name, ct);
 
@@ -107,14 +115,16 @@ public class RitesController(SamoDbContext dbContext) : BaseController(dbContext
             return Unauthorized();
         }
 
-        var rites = await _context.Rites.Where(t => user.Email == User.Identity!.Name && DbFuncs.ToLocalTime(t.CreatedAt, timeZone) == DbFuncs.ToLocalTime(DateTime.Today.ToUniversalTime(), timeZone)).ToArrayAsync(ct);
+        var limits = Dates.TodayLimit(date, timeZone);
+        var rites = await _context.Rites.Where(t => user.Email == User.Identity!.Name)
+            .Where(t => t.CreatedAt >= limits[0] && t.CreatedAt < limits[1]).ToArrayAsync(ct);
         var newRites = rites.Select(r => new RiteDTO
             {
                 Id = r.Id,
                 Completed = r.Completed,
                 Text = r.Text,
                 SortOrder = r.SortOrder,
-                CreatedAt = r.CreatedAt
+                CreatedAt = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(r.CreatedAt, timeZone)
             });
 
         return Ok(new

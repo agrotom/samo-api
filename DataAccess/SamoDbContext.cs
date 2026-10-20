@@ -23,6 +23,8 @@ public class SamoDbContext(DbContextOptions<SamoDbContext> options) : IdentityDb
     public DbSet<Objective> Objectives => Set<Objective>();
     public DbSet<ObjectiveGoal> ObjectiveGoals => Set<ObjectiveGoal>();
     public DbSet<Mission> Missions => Set<Mission>();
+    public DbSet<List> Lists => Set<List>();
+    public DbSet<ListGoal> ListGoals => Set<ListGoal>();
     
     protected override void OnModelCreating(ModelBuilder builder)
     {

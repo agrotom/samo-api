@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -24,7 +25,12 @@ public class WeekHabitsController(SamoDbContext dbContext) : BaseController(dbCo
             return Unauthorized();
         }
 
-        WeekHabit? weekHabit = await _context.WeekHabits.FirstOrDefaultAsync(wh => wh.UserId == user.Id && wh.Id == id && DbFuncs.ToLocalTime(wh.CreatedAt, timeZone) == DbFuncs.ToLocalTime(DateTime.Today.ToUniversalTime(), timeZone), ct);
+        var userTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById(timeZone));
+
+        var week = ISOWeek.GetWeekOfYear(userTime);
+        var year = userTime.Year;
+
+        WeekHabit? weekHabit = await _context.WeekHabits.FirstOrDefaultAsync(wh => wh.UserId == user.Id && wh.Id == id && wh.Year == year && wh.Week == week, ct);
 
         if (weekHabit == null)
         {
@@ -40,7 +46,7 @@ public class WeekHabitsController(SamoDbContext dbContext) : BaseController(dbCo
     }  
 
     [HttpGet("weekHabit")]
-    public async Task<IActionResult> GetWeekHabits([FromHeader(Name = Constants.TIME_ZONE_HEADER_NAME)] string timeZone, CancellationToken ct)
+    public async Task<IActionResult> GetWeekHabits([FromHeader(Name = Constants.TIME_ZONE_HEADER_NAME)] string timeZone, [FromQuery] DateTime date, CancellationToken ct)
     {
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == User.Identity!.Name);
 
@@ -49,19 +55,33 @@ public class WeekHabitsController(SamoDbContext dbContext) : BaseController(dbCo
             return Unauthorized();
         }
 
-        WeekHabit[] weekHabits = await _context.WeekHabits.Where(wh => wh.UserId == user.Id && DbFuncs.ToLocalTime(wh.CreatedAt, timeZone) == DbFuncs.ToLocalTime(DateTime.Today.ToUniversalTime(), timeZone)).ToArrayAsync(ct);
+        var userTime = TimeZoneInfo.ConvertTimeFromUtc(date, TimeZoneInfo.FindSystemTimeZoneById(timeZone));
 
-        Console.WriteLine(weekHabits.Length);
+        var week = ISOWeek.GetWeekOfYear(userTime);
+        var year = userTime.Year;
+
+
+
+        WeekHabit[] weekHabits = await _context.WeekHabits.Where(wh => wh.UserId == user.Id)
+            .Where(t => t.Week == week && t.Year == year).ToArrayAsync(ct);
+
+        if (TimeZoneInfo.ConvertTimeBySystemTimeZoneId(date.ToUniversalTime(), timeZone).Date != TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, timeZone).Date)
+        {
+            return Ok(new
+            {
+                data = weekHabits
+            });
+        }
 
         if (weekHabits.Length < 3)
         {
             for (int i = 0; i < 3 - weekHabits.Length; i++)
             {
-                await _context.AddAsync(new WeekHabit([ false, false, false, false, false, false, false ], "", user), ct);
+                await _context.AddAsync(new WeekHabit([ false, false, false, false, false, false, false ], "", year, week, user), ct);
             }
 
             await _context.SaveChangesAsync(ct);
-            weekHabits = await _context.WeekHabits.Where(wh => wh.UserId == user.Id && DbFuncs.ToLocalTime(wh.CreatedAt, timeZone) == DbFuncs.ToLocalTime(DateTime.Today.ToUniversalTime(), timeZone)).ToArrayAsync(ct);
+            weekHabits = await _context.WeekHabits.Where(wh => wh.UserId == user.Id && DbFuncs.ToLocalTime(wh.CreatedAt, timeZone) == DbFuncs.ToLocalTime(DateTime.Today, timeZone)).ToArrayAsync(ct);
         }
 
         var newWeekHabits = weekHabits.Select(wh => new WeekHabitDTO
@@ -69,7 +89,7 @@ public class WeekHabitsController(SamoDbContext dbContext) : BaseController(dbCo
             Id = wh.Id,
             Checks = wh.Checks,
             Text = wh.Text,
-            CreatedAt = wh.CreatedAt
+            CreatedAt = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(wh.CreatedAt, timeZone)
         });
 
         return Ok(new {

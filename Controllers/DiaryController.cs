@@ -17,7 +17,7 @@ public class DiaryController(SamoDbContext dbContext) : BaseController(dbContext
 
     private async Task UpdateTextEntity<T>(User user, DbSet<T> set, string data, Func<string, User, T> factory, string timeZone, CancellationToken ct) where T : TextEntity
     {
-        T? entity = await set.FirstOrDefaultAsync(entity => entity.User.Email == User.Identity!.Name && DbFuncs.ToLocalTime(entity.CreatedAt, timeZone) == DbFuncs.ToLocalTime(DateTime.Today.ToUniversalTime(), timeZone), ct);
+        T? entity = await set.FirstOrDefaultAsync(entity => entity.User.Email == User.Identity!.Name && DbFuncs.ToLocalTime(entity.CreatedAt, timeZone).Date == DbFuncs.ToLocalTime(DateTime.Today, timeZone).Date, ct);
 
         if (entity == null)
         {
@@ -29,9 +29,10 @@ public class DiaryController(SamoDbContext dbContext) : BaseController(dbContext
         }
     }
 
-    private async Task<string> GetTextEntity<T>(DbSet<T> set, string timeZone) where T : TextEntity
+    private async Task<string> GetTextEntity<T>(DbSet<T> set, DateTime date, string timeZone) where T : TextEntity
     {
-        T? entity = await set.Where(entity => entity.User.Email == User.Identity!.Name).FirstOrDefaultAsync(entity => DbFuncs.ToLocalTime(entity.CreatedAt, timeZone) == DbFuncs.ToLocalTime(DateTime.Today.ToUniversalTime(), timeZone));
+        var limits = Dates.TodayLimit(date, timeZone);
+        T? entity = await set.Where(entity => entity.User.Email == User.Identity!.Name).FirstOrDefaultAsync(entity => entity.CreatedAt >= limits[0] && entity.CreatedAt < limits[1]);
 
         return entity?.Text ?? "";
     }
@@ -76,29 +77,29 @@ public class DiaryController(SamoDbContext dbContext) : BaseController(dbContext
     }
 
     [HttpGet("{type}")]
-    public async Task<IActionResult> GetInsight([FromHeader(Name = Constants.TIME_ZONE_HEADER_NAME)] string timeZone, string type)
+    public async Task<IActionResult> GetInsight([FromHeader(Name = Constants.TIME_ZONE_HEADER_NAME)] string timeZone, [FromQuery] DateTime date, string type)
     {
         string data;
 
         switch (type)
         {
             case Constants.INSIGHTS:
-                data = await GetTextEntity(_context.Insights, timeZone);
+                data = await GetTextEntity(_context.Insights, date, timeZone);
                 break;
             case Constants.FOCUSES:
-                data = await GetTextEntity(_context.Focuses, timeZone);
+                data = await GetTextEntity(_context.Focuses, date, timeZone);
                 break;
             case Constants.THANKS:
-                data = await GetTextEntity(_context.Thanks, timeZone);
+                data = await GetTextEntity(_context.Thanks, date, timeZone);
                 break;
             case Constants.PROBLEMS:
-                data = await GetTextEntity(_context.Problems, timeZone);
+                data = await GetTextEntity(_context.Problems, date, timeZone);
                 break;
             case Constants.RESULTS:
-                data = await GetTextEntity(_context.Results, timeZone);
+                data = await GetTextEntity(_context.Results, date, timeZone);
                 break;
             case Constants.TOMORROW_MAIN_TASKS:
-                data = await GetTextEntity(_context.TomorrowMainTasks, timeZone);
+                data = await GetTextEntity(_context.TomorrowMainTasks, date, timeZone);
                 break;
             default:
                 return NotFound();

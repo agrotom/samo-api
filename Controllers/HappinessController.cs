@@ -22,12 +22,16 @@ public class HappinessController(SamoDbContext dbContext) : BaseController(dbCon
         string timeZone,
         int level,
         bool replace,
+        DateTime date,
         CancellationToken ct
     ) where T : Happiness
     {
-        var happiness = await set.FirstOrDefaultAsync(wh => wh.UserId == user.Id && DbFuncs.ToLocalTime(wh.CreatedAt, timeZone) == DbFuncs.ToLocalTime(DateTime.Today.ToUniversalTime(), timeZone), ct);
+        var todayLimits = Dates.TodayLimit(timeZone);
+        bool todayDate = DateTime.Today >= todayLimits[0] && DateTime.Today < todayLimits[1];
+        var limits = Dates.TodayLimit(date, timeZone);
+        var happiness = await set.FirstOrDefaultAsync(wh => wh.UserId == user.Id && wh.CreatedAt >= limits[0] && wh.CreatedAt < limits[1], ct);
 
-        if (happiness == null)
+        if (happiness == null && todayDate)
         {
             happiness = factory(level, user);
 
@@ -37,7 +41,7 @@ public class HappinessController(SamoDbContext dbContext) : BaseController(dbCon
             return (true, happiness);
         }
 
-        if (replace)
+        if (replace && todayDate)
         {
             happiness.Level = level;
             await _context.SaveChangesAsync(ct);
@@ -62,16 +66,18 @@ public class HappinessController(SamoDbContext dbContext) : BaseController(dbCon
         if (user == null)
             return Unauthorized();
 
+        var today = DateTime.Today;
+
         (bool created, Happiness entity) result = type switch
         {
             "work" => await GetOrCreateTodayHappiness(
                 user, (lvl, u) => new WorkHappiness(lvl, u),
-                _context.WorkHappiness, timeZone, level, true, ct
+                _context.WorkHappiness, timeZone, level, true, today, ct
             ),
 
             "self" => await GetOrCreateTodayHappiness(
                 user, (lvl, u) => new SelfHappiness(lvl, u),
-                _context.SelfHappiness, timeZone, level, true, ct
+                _context.SelfHappiness, timeZone, level, true, today, ct
             ),
 
             _ => default
@@ -86,6 +92,7 @@ public class HappinessController(SamoDbContext dbContext) : BaseController(dbCon
     [HttpGet("{type}")]
     public async Task<IActionResult> GetHappiness(
         [FromHeader(Name = Constants.TIME_ZONE_HEADER_NAME)] string timeZone,
+        [FromQuery] DateTime date,
         string type,
         CancellationToken ct)
     {
@@ -99,24 +106,29 @@ public class HappinessController(SamoDbContext dbContext) : BaseController(dbCon
         {
             "work" => await GetOrCreateTodayHappiness(
                 user, (lvl, u) => new WorkHappiness(lvl, u),
-                _context.WorkHappiness, timeZone, 1, false, ct
+                _context.WorkHappiness, timeZone, 1, false, date, ct
             ),
 
             "self" => await GetOrCreateTodayHappiness(
                 user, (lvl, u) => new SelfHappiness(lvl, u),
-                _context.SelfHappiness, timeZone, 1, false, ct
+                _context.SelfHappiness, timeZone, 1, false, date, ct
             ),
 
             _ => default
         };
 
-        if (result == default)
-            return BadRequest("Unknown type");
+        if (result == default) {
+            return Ok(new
+            {
+                Level = 0,
+                CreatedAt = DateTime.Today.Date
+            });
+        }
 
         return Ok(new HappinessDTO
         {
             Level = result.entity.Level,
-            CreatedAt = result.entity.CreatedAt
+            CreatedAt = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(result.entity.CreatedAt, timeZone)
         });
     }
 }

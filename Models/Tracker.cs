@@ -9,7 +9,7 @@ public class Tracker : UserDependency
     public string Name { get; set; }
     public int CurrentStep { get; set; }
     public int TotalSteps { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.Today.ToUniversalTime();
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Tracker () {}
 

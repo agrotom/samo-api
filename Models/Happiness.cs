@@ -6,7 +6,7 @@ public class Happiness : UserDependency
 {
     public int Id { get; set; }
     public int Level { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.Today.ToUniversalTime();
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Happiness() {}
 

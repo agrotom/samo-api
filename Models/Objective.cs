@@ -14,7 +14,7 @@ public class Objective : UserDependency
     public string ImageUrl { get; set; }
     public bool Completed { get; set; }
     public string GoalsLabel { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.Today.ToUniversalTime();
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Objective() {}
 

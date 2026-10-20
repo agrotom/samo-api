@@ -42,7 +42,7 @@ public class DbInitializer(SamoDbContext context, UserManager<User> userManager,
                 "Albert",
                 "Sharafiev",
                 "IT",
-                new DateTime(2005, 1, 29).ToUniversalTime()
+                new DateOnly(2005, 1, 29)
             ), "aB3456_");
 
             User user = _context.Users.FirstOrDefault(u => u.Email == "gg@gmail.com");

@@ -16,5 +16,5 @@ public class DateUnique : UserDependency
     }
 
     [Key]
-    public DateTime Date { get; set; } = DateTime.Today.ToUniversalTime();
+    public DateTime Date { get; set; } = DateTime.UtcNow;
 }

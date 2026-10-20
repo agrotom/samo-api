@@ -12,8 +12,10 @@ namespace Samo.Controllers;
 [ApiController]
 [Route($"{Constants.API_V1}/objectives/")]
 [Authorize(AuthenticationSchemes = "Bearer", Policy = Constants.REQUIRE_NAME)]
-public class ObjectiveController(SamoDbContext dbContext) : BaseController(dbContext)
+public class ObjectiveController(SamoDbContext dbContext, IWebHostEnvironment env) : BaseController(dbContext)
 {
+
+    private readonly IWebHostEnvironment _env = env;
 
     [HttpPost]
     public async Task<IActionResult> AddObjective([FromBody] ObjectiveDataRequest request, CancellationToken ct)
@@ -23,7 +25,7 @@ public class ObjectiveController(SamoDbContext dbContext) : BaseController(dbCon
             return BadRequest("One of the property of request is empty!");
         }
 
-        if (request.DeadLine.ToUniversalTime() <= DateTime.Now.ToUniversalTime())
+        if (request.DeadLine.ToUniversalTime() <= DateTime.UtcNow)
         {
             return BadRequest("Dead line property cannot be earlier than today!");
         }
@@ -93,6 +95,8 @@ public class ObjectiveController(SamoDbContext dbContext) : BaseController(dbCon
             return NoContent();
         }
 
+        await DeleteObjectiveImage(id, ct);
+
         _context.Objectives.Remove(objective);
 
         await _context.SaveChangesAsync(ct);
@@ -101,7 +105,7 @@ public class ObjectiveController(SamoDbContext dbContext) : BaseController(dbCon
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetObjectives(CancellationToken ct)
+    public async Task<IActionResult> GetObjectives([FromHeader(Name = Constants.TIME_ZONE_HEADER_NAME)] string timeZone, CancellationToken ct)
     {
         User user = await _context.Users.FirstAsync(user => user.Email == User.Identity!.Name, ct);
 
@@ -119,7 +123,7 @@ public class ObjectiveController(SamoDbContext dbContext) : BaseController(dbCon
                 ImageUrl = obj.ImageUrl,
                 Completed = obj.Completed,
                 GoalsLabel = obj.GoalsLabel,
-                CreatedAt = obj.CreatedAt
+                CreatedAt = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(obj.CreatedAt, timeZone)
             })
         });
     }
@@ -146,11 +150,16 @@ public class ObjectiveController(SamoDbContext dbContext) : BaseController(dbCon
             return BadRequest("No objective with ID: " + objId);
         }
 
-        await _context.ObjectiveGoals.AddAsync(new ObjectiveGoal(request.Completed, request.Text, request.DeadLine, objective, user), ct);
+        ObjectiveGoal goal = new ObjectiveGoal(request.Completed, request.Text, request.DeadLine, objective, user);
+
+        await _context.ObjectiveGoals.AddAsync(goal, ct);
 
         await _context.SaveChangesAsync(ct);
 
-        return Ok();
+        return Ok(new
+        {
+            id = goal.Id
+        });
     }
 
     [HttpPut("goals/{objId}/{goalId}")]
@@ -218,13 +227,11 @@ public class ObjectiveController(SamoDbContext dbContext) : BaseController(dbCon
     }
 
     [HttpGet("goals/{id}")]
-    public async Task<IActionResult> GetObjectiveGoals(int id, CancellationToken ct)
+    public async Task<IActionResult> GetObjectiveGoals([FromHeader(Name = Constants.TIME_ZONE_HEADER_NAME)] string timeZone, int id, CancellationToken ct)
     {
         User user = await _context.Users.FirstAsync(user => user.Email == User.Identity!.Name, ct);
 
         Objective? objective = await _context.Objectives.FirstOrDefaultAsync(obj => obj.UserId == user.Id && obj.Id == id, ct);
-
-        Console.WriteLine(objective == null);
 
         if (objective == null)
         {
@@ -240,8 +247,90 @@ public class ObjectiveController(SamoDbContext dbContext) : BaseController(dbCon
                 Text = goal.Text,
                 Completed = goal.Completed,
                 DeadLine = goal.DeadLine,
-                CreatedAt = goal.CreatedAt
+                CreatedAt = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(goal.CreatedAt, timeZone)
             })
         });
+    }
+
+    [HttpPost("goals/upload/{id}")]
+    public async Task<IActionResult> UploadObjectiveImage([FromRoute] int id, [FromForm] IFormFile file, CancellationToken ct)
+    {
+        User user = await _context.Users.FirstAsync(user => user.Email == User.Identity!.Name, ct);
+
+        Objective? objective = await _context.Objectives.FirstOrDefaultAsync(obj => obj.UserId == user.Id && obj.Id == id, ct);
+
+        if (objective == null)
+        {
+            return Ok(new
+            {
+                url = ""
+            });
+        }
+
+        if (file == null || file.Length == 0)
+            return BadRequest("Empty file");
+
+        var uploadsPath = Path.Combine(_env.WebRootPath, "uploads");
+
+        Directory.CreateDirectory(uploadsPath);
+
+        var fileName = $"{Guid.NewGuid()}_{file.FileName}";
+        var filePath = Path.Combine(uploadsPath, fileName);
+
+        using (var stream = new FileStream(filePath, FileMode.Create))
+        {
+            await file.CopyToAsync(stream, ct);
+        }
+
+        var url = $"{Request.Scheme}://{Request.Host}/uploads/{fileName}";
+
+        if (objective.ImageUrl != "")
+        {
+            var split = objective.ImageUrl.Split('/');
+            if (split.Length > 0)
+            {
+                var oldFilePath = Path.Combine(uploadsPath, split.Last());
+                System.IO.File.Delete(oldFilePath);   
+            }
+        }
+        
+        objective.ImageUrl = url;
+
+        await _context.SaveChangesAsync(ct);
+
+        return Ok(new { url });
+    }
+
+    [HttpDelete("goals/upload/{id}")]
+        public async Task<IActionResult> DeleteObjectiveImage([FromRoute] int id, CancellationToken ct)
+    {
+        User user = await _context.Users.FirstAsync(user => user.Email == User.Identity!.Name, ct);
+
+        Objective? objective = await _context.Objectives.FirstOrDefaultAsync(obj => obj.UserId == user.Id && obj.Id == id, ct);
+
+        if (objective == null)
+        {
+            return BadRequest($"No goal with id: { id }");
+        }
+
+        var uploadsPath = Path.Combine(_env.WebRootPath, "uploads");
+
+        Directory.CreateDirectory(uploadsPath);
+
+        if (objective.ImageUrl != "")
+        {
+            var split = objective.ImageUrl.Split('/');
+            if (split.Length > 0)
+            {
+                var oldFilePath = Path.Combine(uploadsPath, split.Last());
+                System.IO.File.Delete(oldFilePath);   
+            }
+        }
+        
+        objective.ImageUrl = "";
+
+        await _context.SaveChangesAsync(ct);
+
+        return Ok();
     }
 }

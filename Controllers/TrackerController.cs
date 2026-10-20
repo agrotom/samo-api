@@ -6,6 +6,7 @@ using Samo.DataAccess;
 using Samo.DTOs;
 using Samo.Models;
 using Samo.Models.Contracts;
+using Samo.Utility;
 
 namespace Samo.Controllers;
 
@@ -44,9 +45,8 @@ public class TrackerController(SamoDbContext dbContext) : BaseController(dbConte
     }
 
     [HttpPut("tracker/{id}")]
-    public async Task<IActionResult> ModifyTracker([FromBody] TrackerDataRequest request, int id, CancellationToken ct)
+    public async Task<IActionResult> ModifyTracker([FromHeader(Name = Constants.TIME_ZONE_HEADER_NAME)] string timeZone, [FromBody] TrackerDataRequest request, int id, CancellationToken ct)
     {
-        Console.WriteLine("changed");
         if (request.Name == null || request.CurrentStep > request.TotalSteps || request.CurrentStep < 0 || request.TotalSteps < 2)
         {
             return BadRequest(BAD_REQUEST_TEXT);
@@ -59,9 +59,10 @@ public class TrackerController(SamoDbContext dbContext) : BaseController(dbConte
             return Unauthorized();
         }
 
-        var trackers = await _context.Trackers.Where(t => user.Email == User.Identity!.Name && t.CreatedAt == DateTime.Today.ToUniversalTime()).ToArrayAsync(ct);
+        var limits = Dates.TodayLimit(timeZone);
+        var trackers = await _context.Trackers.Where(t => user.Email == User.Identity!.Name && t.CreatedAt >= limits[0] && t.CreatedAt < limits[1]).ToArrayAsync(ct);
 
-        Models.Tracker? tracker = await _context.Trackers.FirstOrDefaultAsync(t => t.Id == id, ct);
+        Tracker? tracker = await _context.Trackers.FirstOrDefaultAsync(t => t.Id == id, ct);
 
         if (tracker == null)
         {
@@ -78,7 +79,7 @@ public class TrackerController(SamoDbContext dbContext) : BaseController(dbConte
     }
 
     [HttpDelete("tracker/{id}")]
-    public async Task<IActionResult> RemoveTracker(int id, CancellationToken ct)
+    public async Task<IActionResult> RemoveTracker([FromHeader(Name = Constants.TIME_ZONE_HEADER_NAME)] string timeZone, int id, CancellationToken ct)
     {
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == User.Identity!.Name, ct);
 
@@ -87,7 +88,8 @@ public class TrackerController(SamoDbContext dbContext) : BaseController(dbConte
             return Unauthorized();
         }
 
-        var tracker = await _context.Trackers.FirstOrDefaultAsync(t => user.Email == User.Identity!.Name && t.Id == id, ct);
+        var limits = Dates.TodayLimit(timeZone);
+        var tracker = await _context.Trackers.FirstOrDefaultAsync(t => user.Email == User.Identity!.Name && t.CreatedAt >= limits[0] && t.CreatedAt < limits[1] && t.Id == id, ct);
 
         if (tracker == null)
         {
@@ -102,7 +104,7 @@ public class TrackerController(SamoDbContext dbContext) : BaseController(dbConte
     }
 
     [HttpGet("tracker")]
-    public async Task<IActionResult> GetTrackers(CancellationToken ct)
+    public async Task<IActionResult> GetTrackers([FromHeader(Name = Constants.TIME_ZONE_HEADER_NAME)] string timeZone, [FromQuery] DateTime date, CancellationToken ct)
     {
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == User.Identity!.Name, ct);
 
@@ -111,14 +113,16 @@ public class TrackerController(SamoDbContext dbContext) : BaseController(dbConte
             return Unauthorized();
         }
 
-        var trackers = await _context.Trackers.Where(t => user.Email == User.Identity!.Name && t.CreatedAt == DateTime.Today.ToUniversalTime()).ToArrayAsync(ct);
+        var limits = Dates.TodayLimit(date, timeZone);
+        var trackers = await _context.Trackers.Where(t => user.Email == User.Identity!.Name)
+            .Where(t => t.CreatedAt >= limits[0] && t.CreatedAt < limits[1]).ToArrayAsync(ct);
         var newTrackers = trackers.Select(t => new TrackerDTO
         {
             Id = t.Id,
             Name = t.Name,
             CurrentStep = t.CurrentStep,
             TotalSteps = t.TotalSteps,
-            CreatedAt = t.CreatedAt
+            CreatedAt = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(t.CreatedAt, timeZone)
         });
 
         return Ok(new

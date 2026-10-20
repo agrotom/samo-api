@@ -46,7 +46,7 @@ public class TodayDeedsController(SamoDbContext dbContext) : BaseController(dbCo
     }
 
     [HttpPut("todayDeed/{id}")]
-    public async Task<IActionResult> ModifyRite([FromBody] TodayDeedsRequest request, int id, CancellationToken ct)
+    public async Task<IActionResult> ModifyRite([FromHeader(Name = Constants.TIME_ZONE_HEADER_NAME)] string timeZone, [FromBody] TodayDeedsRequest request, int id, CancellationToken ct)
     {
         if (request.Text == null)
         {
@@ -60,7 +60,8 @@ public class TodayDeedsController(SamoDbContext dbContext) : BaseController(dbCo
             return Unauthorized();
         }
 
-        TodayDeed? todayDeed = await _context.TodayDeeds.FirstOrDefaultAsync(t => t.Id == id && t.UserId == user.Id, ct);
+        var limits = Dates.TodayLimit(timeZone);
+        TodayDeed? todayDeed = await _context.TodayDeeds.FirstOrDefaultAsync(t => t.Id == id && t.UserId == user.Id && t.CreatedAt >= limits[0] && t.CreatedAt < limits[1], ct);
 
         if (todayDeed == null)
         {
@@ -76,7 +77,7 @@ public class TodayDeedsController(SamoDbContext dbContext) : BaseController(dbCo
     }
 
     [HttpDelete("todayDeed/{id}")]
-    public async Task<IActionResult> RemoveRite(int id, CancellationToken ct)
+    public async Task<IActionResult> RemoveRite([FromHeader(Name = Constants.TIME_ZONE_HEADER_NAME)] string timeZone, int id, CancellationToken ct)
     {
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == User.Identity!.Name, ct);
 
@@ -85,7 +86,8 @@ public class TodayDeedsController(SamoDbContext dbContext) : BaseController(dbCo
             return Unauthorized();
         }
 
-        var todayDeed = await _context.TodayDeeds.FirstOrDefaultAsync(t => user.Email == User.Identity!.Name && t.Id == id, ct);
+        var limits = Dates.TodayLimit(timeZone);
+        var todayDeed = await _context.TodayDeeds.FirstOrDefaultAsync(t => user.Email == User.Identity!.Name && t.CreatedAt >= limits[0] && t.CreatedAt < limits[1] && t.Id == id, ct);
 
         if (todayDeed == null)
         {
@@ -100,7 +102,7 @@ public class TodayDeedsController(SamoDbContext dbContext) : BaseController(dbCo
     }
 
     [HttpGet("todayDeed")]
-    public async Task<IActionResult> GetRites([FromHeader(Name = Constants.TIME_ZONE_HEADER_NAME)] string timeZone, CancellationToken ct)
+    public async Task<IActionResult> GetRites([FromHeader(Name = Constants.TIME_ZONE_HEADER_NAME)] string timeZone, [FromQuery] DateTime date, CancellationToken ct)
     {
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == User.Identity!.Name, ct);
 
@@ -109,13 +111,15 @@ public class TodayDeedsController(SamoDbContext dbContext) : BaseController(dbCo
             return Unauthorized();
         }
 
-        var todayDeeds = await _context.TodayDeeds.Where(t => user.Email == User.Identity!.Name && DbFuncs.ToLocalTime(t.CreatedAt, timeZone) == DbFuncs.ToLocalTime(DateTime.Today.ToUniversalTime(), timeZone)).ToArrayAsync(ct);
+        var limits = Dates.TodayLimit(date, timeZone);
+        var todayDeeds = await _context.TodayDeeds.Where(t => user.Email == User.Identity!.Name)
+            .Where(t => t.CreatedAt >= limits[0] && t.CreatedAt < limits[1]).ToArrayAsync(ct);
         var newTodayDeeds = todayDeeds.Select(r => new TodayDeedDTO
             {
                 Id = r.Id,
                 Level = r.Level,
                 Text = r.Text,
-                CreatedAt = r.CreatedAt
+                CreatedAt = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(r.CreatedAt, timeZone)
             });
 
         return Ok(new
